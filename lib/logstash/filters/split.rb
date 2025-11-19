@@ -81,17 +81,29 @@ class LogStash::Filters::Split < LogStash::Filters::Base
 
     # set event_target to @field if not configured
     event_target = @target.nil? ? @field : @target
-
+    split_bytes = 0
+    logger.trace? && logger.trace("Event being split into #{splits.size} events")
+    
     splits.each do |value|
       next if value.nil? || (value.is_a?(String) && value.empty?)
-      @logger.debug? && @logger.debug("Split event", :value => value, :field => @field)
 
       event_split = event.clone
       event_split.set(event_target, value)
       filter_matched(event_split)
 
+      logger.trace? && split_bytes += event_split.to_json.size
+
       # Push this new event onto the stack at the LogStash::FilterWorker
       yield event_split
+    end
+
+
+    if logger.trace?
+      original_bytes = event.to_json.size
+      logger.trace("Estimated event size growth after split",
+        :original_bytes => original_bytes,
+        :split_bytes => split_bytes,
+        :growth_ratio => (split_bytes.to_f / original_bytes).round(2))
     end
 
     # Cancel this event, we'll use the newly generated ones above.
